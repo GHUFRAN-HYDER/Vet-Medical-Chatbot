@@ -20,7 +20,12 @@ import getpass
 from langchain.schema import Document
 from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
+import re
+from langchain.text_splitter import CharacterTextSplitter
 
+
+# Set page configuration as the first Streamlit command
+st.set_page_config(page_title="Medical Chatbot", layout="centered")
 # Load environment variables from .env file
 load_dotenv()
 
@@ -33,9 +38,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Initialize session state variables
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-import re
-from langchain.text_splitter import CharacterTextSplitter
 
 # Define the text splitter to split by cases
 def split_cases(text):
@@ -51,7 +53,7 @@ def split_cases(text):
 @st.cache_resource
 def initialize_resources():
     # Load and split PDF
-    loader = PyPDFLoader("Cushing's.pdf")
+    loader = PyPDFLoader("I:/UPWORK/ai-chatbot/Cushing's.pdf")
 
     raw_docs = loader.load_and_split()
  
@@ -63,14 +65,11 @@ def initialize_resources():
 
     # Create documents
     docs = [Document(page_content=case) for case in case_texts]
-    
 
-    # Create documents
-    docs = [Document(page_content=case) for case in case_texts]
 
     # Verify the content and length of each chunk
-    for i, doc in enumerate(docs):
-        logging.info(f"Chunk {i+1} length: {len(doc.page_content)} characters")
+    # for i, doc in enumerate(docs):
+    #     logging.info(f"Chunk {i+1} length: {len(doc.page_content)} characters")
     # Generate embeddings
     embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
     
@@ -79,7 +78,7 @@ def initialize_resources():
     pc = Pinecone(api_key=pinecone_api_key )
     index_name = "chatmed-index"
 
-    # Create index if it doesn't exist
+# Create index if it doesn't exist
     existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
     if index_name not in existing_indexes:
         pc.create_index(
@@ -90,17 +89,19 @@ def initialize_resources():
         )
         while not pc.describe_index(index_name).status["ready"]:
             time.sleep(1)
-
-    index = pc.Index(index_name)
     
-    # Initialize vector store
+    index = pc.Index(index_name)
     vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
     
-    # Upload documents if index is empty
-    try:
-        vectorstore.add_documents(docs)
-    except Exception as e:
-        st.error(f"Error adding documents: {e}")
+    # Check if index is empty before adding documents
+    if len(index.fetch(ids=["1"]).vectors) == 0:  # Check if index is empty
+        try:
+            vectorstore.add_documents(docs)
+            logging.info("Documents added to empty index")
+        except Exception as e:
+            logging.error(f"Error adding documents: {e}")
+    else:
+        logging.info("Index already contains vectors, skipping document addition")
     
     # Initialize retriever and LLM
     retriever = vectorstore.as_retriever()
@@ -112,6 +113,9 @@ def initialize_resources():
 
         You must not miss any information in the context.You must give the exact answer in the context with no hallucination.
         
+        
+        If the context does not contain the answer to the user's question, reply with:
+    "I'm sorry, I couldn't find the exact information you're looking for. For further assistance, please reach out to the Facebook group Ask Dr. Steve DVM® at https://www.facebook.com/groups/1158575954706282.
         {context}
         """),
         ("human", "{input}")
@@ -123,17 +127,13 @@ def initialize_resources():
     
     return rag_chain
 
+# Initialize the RAG chain
+rag_chain = initialize_resources()
+
 def main():
-    st.set_page_config(page_title="Medical Chatbot", layout="centered")
+
     st.title("Vet Q&A Assistant")
     
-    # Initialize the RAG chain
-    try:
-        rag_chain = initialize_resources()
-    except Exception as e:
-        st.error(f"Error initializing resources: {e}")
-        return
-
     # Display chat messages from history on app rerun
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
