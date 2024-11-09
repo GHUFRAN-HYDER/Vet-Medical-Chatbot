@@ -53,7 +53,7 @@ def split_cases(text):
 @st.cache_resource
 def initialize_resources():
     # Load and split PDF
-    loader = PyPDFLoader("I:/UPWORK/ai-chatbot/Cushing's.pdf")
+    loader = PyPDFLoader("Cushing's.pdf")
 
     raw_docs = loader.load_and_split()
  
