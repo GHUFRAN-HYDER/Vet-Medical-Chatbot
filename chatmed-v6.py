@@ -53,19 +53,25 @@ def split_cases(text):
 @st.cache_resource
 def initialize_resources():
     # Load and split PDF
-    loader = PyPDFLoader("Cushing's.pdf")
+    loader = PyPDFLoader("I:/UPWORK/ai-chatbot/Cushing's.pdf")
 
     raw_docs = loader.load_and_split()
  
     # Concatenate all page contents into a single string
-    raw_text = " ".join(doc.page_content for doc in raw_docs)
+    # raw_text = " ".join(doc.page_content for doc in raw_docs)
     
     # Apply the case splitter to the concatenated text
-    case_texts = split_cases(raw_text)
+    # case_texts = split_cases(raw_text)
 
-    # Create documents
-    docs = [Document(page_content=case) for case in case_texts]
-
+    # # Create documents
+    # docs = [Document(page_content=case) for case in case_texts]
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=400,
+        chunk_overlap=100,
+        length_function=len,
+        is_separator_regex=False,
+    )
+    docs = text_splitter.split_documents(raw_docs)
 
     # Verify the content and length of each chunk
     # for i, doc in enumerate(docs):
