@@ -1,86 +1,80 @@
 import logging
-import os
 import streamlit as st
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_openai import OpenAIEmbeddings
-from langchain_openai import ChatOpenAI
-from langchain import hub
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.chains import create_history_aware_retriever
 from langchain.chains import create_retrieval_chain
+from langchain_openai import OpenAIEmbeddings
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import ChatOpenAI
 from langchain_pinecone import PineconeVectorStore
-import time
-import getpass
-from langchain.schema import Document
 from pinecone import Pinecone, ServerlessSpec
+import time
+import os
 from dotenv import load_dotenv
-import re
-from langchain.text_splitter import CharacterTextSplitter
 
-
-# Set page configuration as the first Streamlit command
-st.set_page_config(page_title="Medical Chatbot", layout="centered")
 # Load environment variables from .env file
 load_dotenv()
 
-# Get the Pinecone API key
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Enhanced logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize session state variables
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-# Define the text splitter to split by cases
-def split_cases(text):
-    cases = re.split(r"(Case \d+)", text)  # Split by case numbers
-    docs = []
-    for i in range(1, len(cases), 2):
-        case_text = f"{cases[i]} {cases[i + 1]}"  # Combine "Case X" with its content
-        docs.append(case_text.strip())
-    return docs
+def load_and_debug_pdf():
+    """Load PDF and return debug information"""
+    try:
+        loader = PyPDFLoader("Cushing's.pdf")
+        raw_docs = loader.load_and_split()    
+        return raw_docs
+    
+    except Exception as e:
+        logger.error(f"Error loading PDF: {str(e)}")
+        raise
 
-
+def split_and_debug_documents(raw_docs):
+    """Split documents and return debug information"""
+    try:
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=100,
+            length_function=len,
+            is_separator_regex=False,
+        )
+        docs = text_splitter.split_documents(raw_docs)
+             
+        return docs
+    
+    except Exception as e:
+        logger.error(f"Error splitting documents: {str(e)}")
+        raise
 
 @st.cache_resource
 def initialize_resources():
-    # Load and split PDF
-    loader = PyPDFLoader("Cushing's.pdf")
-
-    raw_docs = loader.load_and_split()
- 
-    # Concatenate all page contents into a single string
-    # raw_text = " ".join(doc.page_content for doc in raw_docs)
+    # Load and split PDF with debugging
+    raw_docs, pdf_debug = load_and_debug_pdf()
+    docs, split_debug = split_and_debug_documents(raw_docs)
     
-    # Apply the case splitter to the concatenated text
-    # case_texts = split_cases(raw_text)
-
-    # # Create documents
-    # docs = [Document(page_content=case) for case in case_texts]
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=400,
-        chunk_overlap=100,
-        length_function=len,
-        is_separator_regex=False,
-    )
-    docs = text_splitter.split_documents(raw_docs)
-
-    # Verify the content and length of each chunk
-    # for i, doc in enumerate(docs):
-    #     logging.info(f"Chunk {i+1} length: {len(doc.page_content)} characters")
-    # Generate embeddings
+    # Store debug info in session state
+    st.session_state.debug_info.update({
+        "pdf_loading": pdf_debug,
+        "document_splitting": split_debug
+    })
+    
     embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
-    
-    # # Setup Pinecone
 
+    # # Setup Pinecone
     pc = Pinecone(api_key=pinecone_api_key )
     index_name = "chatmed-index"
 
@@ -97,6 +91,7 @@ def initialize_resources():
             time.sleep(1)
     
     index = pc.Index(index_name)
+
     vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
     
     # Check if index is empty before adding documents
@@ -108,45 +103,89 @@ def initialize_resources():
             logging.error(f"Error adding documents: {e}")
     else:
         logging.info("Index already contains vectors, skipping document addition")
-    
-    # Initialize retriever and LLM
-    retriever = vectorstore.as_retriever()
-    llm = ChatOpenAI(model="gpt-4o-mini")
-    
-    # Create the RAG chain
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are Dr. Steve, a veterinarian who provides advice on pet health.You must not include information or any text on you own.
 
-        You must not miss any information in the context.You must give the exact answer in the context with no hallucination.
-        
-        
-        If the context does not contain the answer to the user's question, reply with:
+    retriever = vectorstore.as_retriever(
+        search_kwargs={"k": 3}  # Retrieve top 3 most relevant chunks
+    )
+
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    system_prompt = """
+    You are Dr. Steve, a veterinarian who provides advice on pet health. Use the following guidelines:
+    Respond in bullets format.
+    You must not hallucinate or give information which is not in the context
+    Provide information strictly based on the retrieved documents. Do not include any advice or responses not directly found within the retrieved content. 
+    If the context does not contain enough information to answer the question, respond with:
+
     "I'm sorry, I couldn't find the exact information you're looking for. For further assistance, please reach out to the Facebook group Ask Dr. Steve DVM® at https://www.facebook.com/groups/1158575954706282.
-        {context}
-        """),
-        ("human", "{input}")
-    ])
-    
-    
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)
-    rag_chain = create_retrieval_chain(retriever, question_answer_chain)
-    
-    return rag_chain
 
-# Initialize the RAG chain
-rag_chain = initialize_resources()
+    Context for veterinary-related questions:
+    
+    {context}
+    """
+    contextualize_q_system_prompt = (
+        "Given a chat history and the latest user question "
+        "which might reference context in the chat history, "
+        "formulate a standalone question which can be understood "
+        "without the chat history."
+    )
+
+    contextualize_q_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", contextualize_q_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ]
+    )
+
+    history_aware_retriever = create_history_aware_retriever(
+        llm, retriever, contextualize_q_prompt
+    )
+
+    qa_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", system_prompt),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}"),
+    ]
+)
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+    
+    return retriever, rag_chain
+
+# Initialize the resources
+retriever, rag_chain = initialize_resources()
+
+
+def process_query(prompt, chat_history):
+    """Process the query with enhanced debugging"""
+    try:
+        # Get relevant documents first
+        relevant_docs = retriever.get_relevant_documents(prompt)
+        
+        # Process with RAG chain
+        response = rag_chain.invoke({
+            "input": prompt, 
+            "chat_history": chat_history
+        })
+        
+        return response["answer"], relevant_docs
+    
+    except Exception as e:
+        logger.error(f"Error processing query: {str(e)}")
+        return f"Error processing your question: {str(e)}", []
 
 def main():
-
-    st.title("Vet Q&A Assistant")
+    st.title("Cushings Midicine Assistant")
     
-    # Display chat messages from history on app rerun
+    # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Accept user input
-    if prompt := st.chat_input(""):
+    # Handle user input
+    if prompt := st.chat_input("Ask a question about ..."):
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -154,16 +193,14 @@ def main():
 
         # Generate response
         with st.chat_message("assistant"):
-            try:
-                response = rag_chain.invoke({"input": prompt})
-                answer = response["answer"]
-                st.markdown(answer)
-                # Add assistant response to chat history
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-            except Exception as e:
-                error_message = f"Error generating response: {str(e)}"
-                st.error(error_message)
-                st.session_state.messages.append({"role": "assistant", "content": error_message})
+            chat_history = [(msg["role"], msg["content"]) 
+                          for msg in st.session_state.messages[:-1]]
+            
+            answer, relevant_docs = process_query(prompt, chat_history)
+            st.markdown(answer)
+            
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": answer})
 
 if __name__ == "__main__":
     main()
