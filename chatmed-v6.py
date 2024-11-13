@@ -109,7 +109,7 @@ def initialize_resources():
     Respond in bullets format.
     You must not hallucinate or give information which is not in the context
     Provide information strictly based on the retrieved documents. Do not include any advice or responses not directly found within the retrieved content. 
-    If the context does not contain enough information to answer the question, respond with:
+    If you dont have the knowlege of a cushings symptoms or medicine asked in the query:
 
     "I'm sorry, I couldn't find the exact information you're looking for. For further assistance, please reach out to the Facebook group Ask Dr. Steve DVM® at https://www.facebook.com/groups/1158575954706282.
 
