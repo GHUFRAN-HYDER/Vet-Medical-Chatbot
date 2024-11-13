@@ -32,7 +32,7 @@ if "messages" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-def load_and_debug_pdf():
+def load_pdf():
     """Load PDF and return debug information"""
     try:
         loader = PyPDFLoader("Cushing's.pdf")
@@ -43,7 +43,7 @@ def load_and_debug_pdf():
         logger.error(f"Error loading PDF: {str(e)}")
         raise
 
-def split_and_debug_documents(raw_docs):
+def split_documents(raw_docs):
     """Split documents and return debug information"""
     try:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -63,15 +63,9 @@ def split_and_debug_documents(raw_docs):
 @st.cache_resource
 def initialize_resources():
     # Load and split PDF with debugging
-    raw_docs, pdf_debug = load_and_debug_pdf()
-    docs, split_debug = split_and_debug_documents(raw_docs)
-    
-    # Store debug info in session state
-    st.session_state.debug_info.update({
-        "pdf_loading": pdf_debug,
-        "document_splitting": split_debug
-    })
-    
+    raw_docs = load_pdf()
+    docs = split_documents(raw_docs)
+      
     embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
     # # Setup Pinecone
