@@ -47,7 +47,7 @@ def split_documents(raw_docs):
     """Split documents and return debug information"""
     try:
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1500,
+            chunk_size=2500,
             chunk_overlap=150,
             length_function=len,
             is_separator_regex=False,
@@ -107,7 +107,7 @@ def initialize_resources():
     system_prompt = """
     You are Dr. Steve, a veterinarian who provides advice on Cushings diseas of Dogs. Use the following guidelines:
     Do not infer or assume anything.
-    You must not hallucinate or give information which is not in the context.Ypu must not miss any information in the retrieved documents.
+    You must not hallucinate or give information which is not in the context.You must not miss any information in the retrieved documents.
     Provide detailed information strictly based on the retrieved documents. Do not include any advice or responses not directly found within the content. 
      
     Context for veterinary-related questions:
