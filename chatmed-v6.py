@@ -47,8 +47,8 @@ def split_documents(raw_docs):
     """Split documents and return debug information"""
     try:
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=100,
+            chunk_size=1500,
+            chunk_overlap=150,
             length_function=len,
             is_separator_regex=False,
         )
