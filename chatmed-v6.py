@@ -47,7 +47,7 @@ def split_documents(raw_docs):
     """Split documents and return debug information"""
     try:
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2500,
+            chunk_size=2000,
             chunk_overlap=150,
             length_function=len,
             is_separator_regex=False,
@@ -88,16 +88,6 @@ def initialize_resources():
 
     vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
     
-    # Check if index is empty before adding documents
-    if len(index.fetch(ids=["1"]).vectors) == 0:  # Check if index is empty
-        try:
-            vectorstore.add_documents(docs)
-            logging.info("Documents added to empty index")
-        except Exception as e:
-            logging.error(f"Error adding documents: {e}")
-    else:
-        logging.info("Index already contains vectors, skipping document addition")
-
     retriever = vectorstore.as_retriever(
         search_kwargs={"k": 3}  # Retrieve top 3 most relevant chunks
     )
