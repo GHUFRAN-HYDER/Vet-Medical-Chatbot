@@ -168,7 +168,7 @@ def process_query(prompt, chat_history):
         return f"Error processing your question: {str(e)}", []
 
 def main():
-    st.title("Cushings Midicine Assistant")
+    st.title("Cushings Medicine Assistant")
     
     # Display chat messages
     for message in st.session_state.messages:
