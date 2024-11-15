@@ -87,7 +87,7 @@ def initialize_resources():
     index = pc.Index(index_name)
 
     vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
-    
+    vectorstore.add_documents(docs)
     retriever = vectorstore.as_retriever(
         search_kwargs={"k": 3}  # Retrieve top 3 most relevant chunks
     )
