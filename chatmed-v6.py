@@ -13,6 +13,7 @@ from pinecone import Pinecone, ServerlessSpec
 import time
 import os
 from dotenv import load_dotenv
+from langchain_community.document_loaders import TextLoader
 
 # Load environment variables from .env file
 load_dotenv()
@@ -35,8 +36,10 @@ if "chat_history" not in st.session_state:
 def load_pdf():
     """Load PDF and return debug information"""
     try:
-        loader = PyPDFLoader("Cushing's.pdf")
-        raw_docs = loader.load_and_split()    
+    
+        loader = TextLoader('cushings.txt', encoding='utf-8')
+        raw_docs = loader.load()
+        
         return raw_docs
     
     except Exception as e:
@@ -47,8 +50,9 @@ def split_documents(raw_docs):
     """Split documents and return debug information"""
     try:
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2000,
-            chunk_overlap=150,
+            separators=["Question","Dr. Steve's Advice"],
+            chunk_size=1500,
+            chunk_overlap=100,
             length_function=len,
             is_separator_regex=False,
         )
@@ -66,7 +70,7 @@ def initialize_resources():
     raw_docs = load_pdf()
     docs = split_documents(raw_docs)
       
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
     # # Setup Pinecone
     pc = Pinecone(api_key=pinecone_api_key )
@@ -77,7 +81,7 @@ def initialize_resources():
     if index_name not in existing_indexes:
         pc.create_index(
             name=index_name,
-            dimension=3072,
+            dimension=1536,
             metric="cosine",
             spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
@@ -87,7 +91,16 @@ def initialize_resources():
     index = pc.Index(index_name)
 
     vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
-    vectorstore.add_documents(docs)
+    
+    if not index.describe_index_stats().total_vector_count:
+        try:
+            vectorstore.add_documents(docs)
+            logging.info("Documents added to empty index")
+        except Exception as e:
+            logging.error(f"Error adding documents: {e}")
+    else:
+        logging.info("Index already contains vectors, skipping document addition")
+        
     retriever = vectorstore.as_retriever(
         search_kwargs={"k": 3}  # Retrieve top 3 most relevant chunks
     )
@@ -95,11 +108,15 @@ def initialize_resources():
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
     system_prompt = """
-    You are Dr. Steve, a veterinarian who provides advice on Cushings diseas of Dogs. Use the following guidelines:
-    Do not infer or assume anything.
-    You must not hallucinate or give information which is not in the context.You must not miss any information in the retrieved chunks.
-    Do not include any advice or responses not directly found within the content. 
-     
+    Act as Dr. Steve, a veterinarian specializing in Cushing's disease in dogs. Using the provided context, answer the query thoroughly without omitting any important details from the retrieved chunks. 
+
+    Guidelines:
+    Response must be in paragrapgh format
+    Do not assume or infer anything beyond the provided context.
+    Consolidate all relevant information from the retrieved chunks.
+    You must not miss any information in the retrieved chunks
+    Address the question comprehensively, integrating advice and recommendations, causes and reasons in the retrieved chunks.
+   
     Context for veterinary-related questions:
     
     {context}
