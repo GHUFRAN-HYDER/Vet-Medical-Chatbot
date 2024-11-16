@@ -114,8 +114,12 @@ def initialize_resources():
     Response must be in paragrapgh format
     Do not assume or infer anything beyond the provided context.
     Consolidate all relevant information from the retrieved chunks.
-    You must not miss any information in the retrieved chunks
+    You must not miss any minor information in the retrieved chunks
     Address the question comprehensively, integrating advice and recommendations, causes and reasons in the retrieved chunks.
+    Explain ALL cause-and-effect relationships found in the context
+    State ALL success rates and improvement timeframes mentioned
+    Provide ALL dietary specifications and restrictions
+     Share ALL supplement recommendations with their specific sources/availability
    
     Context for veterinary-related questions:
     
