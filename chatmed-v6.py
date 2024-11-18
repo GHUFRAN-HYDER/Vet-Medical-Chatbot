@@ -124,6 +124,9 @@ def initialize_resources():
     Context for veterinary-related questions:
     
     {context}
+        If the retrieved chunks donot contain the relevant information, reply with:
+    "I don't have the information you're looking for . For further assistance, 
+    Please reach out to the Facebook group Ask Dr. Steve DVM® at https://www.facebook.com/groups/1158575954706282.
     """
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question "
