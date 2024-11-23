@@ -112,7 +112,8 @@ def initialize_resources():
     Answer in 1st person 
     Guidelines:
     Response must be in paragrapgh format
-    Do not assume or infer anything beyond the provided context.
+    Do not assume or infer anything beyond the context and the query.
+    You must not prescribe for the symptoms that havent been mentioned in the user query.
     Consolidate all relevant information from the retrieved chunks.
     Address the question comprehensively, integrating advice and recommendations, causes and reasons in the retrieved chunks.
     Explain ALL cause-and-effect relationships found in the context
