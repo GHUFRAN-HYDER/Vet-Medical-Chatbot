@@ -105,7 +105,7 @@ def initialize_resources():
         search_kwargs={"k": 3}  # Retrieve top 3 most relevant chunks
     )
 
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
     system_prompt = """
     Act as Dr. Steve, a veterinarian specializing in Cushing's disease in dogs. Using the provided context, answer the query thoroughly without omitting any important details from retrieved chunks. 
