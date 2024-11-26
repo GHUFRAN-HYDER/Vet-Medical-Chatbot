@@ -90,12 +90,20 @@ def initialize_resources():
         # Add documents to the newly created index
         vectorstore.add_documents(docs)
         logging.info("Documents added to the newly created index")
-        
     
     index = pc.Index(index_name)
 
     vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
-           
+    
+    if not index.describe_index_stats().total_vector_count:
+        try:
+            vectorstore.add_documents(docs)
+            logging.info("Documents added to empty index")
+        except Exception as e:
+            logging.error(f"Error adding documents: {e}")
+    else:
+        logging.info("Index already contains vectors, skipping document addition")
+        
     retriever = vectorstore.as_retriever(
         search_kwargs={"k": 3}  # Retrieve top 3 most relevant chunks
     )
