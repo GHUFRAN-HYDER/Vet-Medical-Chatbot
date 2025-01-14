@@ -14,7 +14,6 @@ import time
 import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders.csv_loader import CSVLoader
 
 # Load environment variables from .env file
