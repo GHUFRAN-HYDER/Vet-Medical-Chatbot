@@ -14,6 +14,8 @@ import time
 import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.document_loaders.csv_loader import CSVLoader
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,32 +34,46 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "retriever" not in st.session_state:
+    st.session_state.retriever = None
+if "rag_chain" not in st.session_state:
+    st.session_state.rag_chain = None
 
-def load_pdf():
-    """Load PDF and return debug information"""
+def load_csv_data():
+    """Load CSV data combining post_text and comment columns"""
     try:
-    
-        loader = TextLoader('cushings.txt', encoding='utf-8')
+        file_path = "posts-comments-time.csv"
+        
+        loader = CSVLoader(
+            file_path=file_path,
+            encoding="MacRoman"
+        )
+        
+        documents = []
         raw_docs = loader.load()
         
-        return raw_docs
-    
+        for doc in raw_docs:
+            post = doc.metadata.get('post_text', '')
+            comment = doc.metadata.get('comment', '')
+            doc.page_content = f"Question: {post}\nAnswer: {comment}"
+            documents.append(doc)
+            
+        logger.info(f"Successfully loaded {len(documents)} documents")
+        return documents
     except Exception as e:
-        logger.error(f"Error loading PDF: {str(e)}")
+        logger.error(f"Error loading CSV: {str(e)}")
         raise
 
 def split_documents(raw_docs):
     """Split documents and return debug information"""
     try:
         text_splitter = RecursiveCharacterTextSplitter(
-            separators=["Question","Dr. Steve's Advice"],
             chunk_size=1500,
             chunk_overlap=100,
             length_function=len,
             is_separator_regex=False,
         )
         docs = text_splitter.split_documents(raw_docs)
-             
         return docs
     
     except Exception as e:
@@ -66,17 +82,17 @@ def split_documents(raw_docs):
 
 @st.cache_resource
 def initialize_resources():
-    # Load and split PDF with debugging
-    raw_docs = load_pdf()
-    docs = split_documents(raw_docs)
+    # Load documents
+    documents = load_csv_data()
+    docs = split_documents(documents)
       
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-    # # Setup Pinecone
-    pc = Pinecone(api_key=pinecone_api_key )
+    
+    # Setup Pinecone
+    pc = Pinecone(api_key=pinecone_api_key)
     index_name = "chatmed-index"
 
-# Create index if it doesn't exist
+    # Create index if it doesn't exist
     existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
     if index_name not in existing_indexes:
         pc.create_index(
@@ -86,13 +102,9 @@ def initialize_resources():
             spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
         while not pc.describe_index(index_name).status["ready"]:
-            time.sleep(1)
-        # Add documents to the newly created index
-        vectorstore.add_documents(docs)
-        logging.info("Documents added to the newly created index")
-    
-    index = pc.Index(index_name)
+            time.sleep(2)
 
+    index = pc.Index(index_name)
     vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
     
     if not index.describe_index_stats().total_vector_count:
@@ -105,11 +117,13 @@ def initialize_resources():
         logging.info("Index already contains vectors, skipping document addition")
         
     retriever = vectorstore.as_retriever(
-        search_kwargs={"k": 3}  # Retrieve top 3 most relevant chunks
+        search_kwargs={"k": 3}
     )
-
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
-
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    logging.info(f"API key being used: {api_key}")
+    llm = ChatOpenAI(model="gpt-4", temperature=0)  # Fixed model name typo
+    
     system_prompt = """
     Act as Dr. Steve, a veterinarian specializing in Cushing's disease in dogs. Using the provided context, answer the query thoroughly without omitting any important details from retrieved chunks. 
     Guidelines:
@@ -130,8 +144,8 @@ def initialize_resources():
     Context for veterinary-related questions:
     
     {context}
-
     """
+    
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question "
         "which might reference context in the chat history, "
@@ -152,41 +166,27 @@ def initialize_resources():
     )
 
     qa_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system_prompt),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-    ]
-)
+        [
+            ("system", system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ]
+    )
+    
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
     
     return retriever, rag_chain
 
-# Initialize the resources
-retriever, rag_chain = initialize_resources()
-
-
-def process_query(prompt, chat_history):
-    """Process the query with enhanced debugging"""
-    try:
-        # Get relevant documents first
-        relevant_docs = retriever.get_relevant_documents(prompt)
-        
-        # Process with RAG chain
-        response = rag_chain.invoke({
-            "input": prompt, 
-            "chat_history": chat_history
-        })
-        
-        return response["answer"], relevant_docs
-    
-    except Exception as e:
-        logger.error(f"Error processing query: {str(e)}")
-        return f"Error processing your question: {str(e)}", []
-
 def main():
     st.title("Cushings Medicine Assistant")
+    
+    # Initialize resources if not already done
+    if st.session_state.retriever is None or st.session_state.rag_chain is None:
+        st.session_state.retriever, st.session_state.rag_chain = initialize_resources()
+    
+    # Add debug toggle
+    show_debug = st.sidebar.checkbox("Show Debug Information")
     
     # Display chat messages
     for message in st.session_state.messages:
@@ -194,7 +194,7 @@ def main():
             st.markdown(message["content"])
 
     # Handle user input
-    if prompt := st.chat_input("Ask a question about ..."):
+    if prompt := st.chat_input("Ask a question about Cushing's disease..."):
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -205,11 +205,34 @@ def main():
             chat_history = [(msg["role"], msg["content"]) 
                           for msg in st.session_state.messages[:-1]]
             
-            answer, relevant_docs = process_query(prompt, chat_history)
-            st.markdown(answer)
-            
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            try:
+                # Get relevant documents first
+                relevant_docs = st.session_state.retriever.get_relevant_documents(prompt)
+                
+                # Show debug information if enabled
+                if show_debug:
+                    with st.expander("Debug: Retrieved Documents"):
+                        for i, doc in enumerate(relevant_docs):
+                            st.markdown(f"**Document {i+1}:**")
+                            st.text(doc.page_content)
+                            st.markdown("**Metadata:**")
+                            st.json(doc.metadata)
+                            st.markdown("---")
+                
+                # Process with RAG chain
+                response = st.session_state.rag_chain.invoke({
+                    "input": prompt, 
+                    "chat_history": chat_history
+                })
+                
+                st.markdown(response["answer"])
+                
+                # Add assistant response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": response["answer"]})
+                
+            except Exception as e:
+                st.error(f"Error processing query: {str(e)}")
+                logger.error(f"Error processing query: {str(e)}")
 
 if __name__ == "__main__":
     main()
