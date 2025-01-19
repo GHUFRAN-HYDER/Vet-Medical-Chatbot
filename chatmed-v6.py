@@ -131,6 +131,7 @@ def initialize_resources():
     Consolidate all relevant information from the retrieved chunks.
     Address the question comprehensively, integrating advice and recommendations, causes and reasons in the retrieved chunks.
     Explain ALL cause-and-effect relationships found in the context
+    Include any hyperlinks or references mentioned in the retrieved chunks like for medicine buying
     State ALL success rates and improvement timeframes mentioned
     Provide ALL dietary specifications and restrictions
      Share ALL supplement recommendations with their specific sources/availability
@@ -178,7 +179,7 @@ def initialize_resources():
     return retriever, rag_chain
 
 def main():
-    st.title("Cushings Medicine Assistant")
+    st.title("Dr. Steve Chat Assistant")
     
     # Initialize resources if not already done
     if st.session_state.retriever is None or st.session_state.rag_chain is None:
@@ -214,8 +215,6 @@ def main():
                         for i, doc in enumerate(relevant_docs):
                             st.markdown(f"**Document {i+1}:**")
                             st.text(doc.page_content)
-                            st.markdown("**Metadata:**")
-                            st.json(doc.metadata)
                             st.markdown("---")
                 
                 # Process with RAG chain
