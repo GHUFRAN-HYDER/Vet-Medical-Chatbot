@@ -80,33 +80,33 @@ def split_documents(raw_docs):
         logger.error(f"Error splitting documents: {str(e)}")
         raise
 
-def parse_qa_pairs(file_path):
-    """Parse raw text into structured Q&A pairs and return LangChain Documents."""
-    with open(file_path, "r", encoding="utf-8") as file:
-        content = file.read()
+# def parse_qa_pairs(file_path):
+#     """Parse raw text into structured Q&A pairs and return LangChain Documents."""
+#     with open(file_path, "r", encoding="utf-8") as file:
+#         content = file.read()
 
-    # Split text by "Question:" delimiter
-    raw_pairs = content.split("Question:")
-    documents = []
+#     # Split text by "Question:" delimiter
+#     raw_pairs = content.split("Question:")
+#     documents = []
 
-    for pair in raw_pairs:
-        if "Answer:" in pair:
-            question, answer = pair.split("Answer:", 1)
-            documents.append(Document(
-                page_content=f"Question: {question.strip()}\nAnswer: {answer.strip()}",
-                metadata={}  # Add metadata here if needed
-            ))
+#     for pair in raw_pairs:
+#         if "Answer:" in pair:
+#             question, answer = pair.split("Answer:", 1)
+#             documents.append(Document(
+#                 page_content=f"Question: {question.strip()}\nAnswer: {answer.strip()}",
+#                 metadata={}  # Add metadata here if needed
+#             ))
 
-    return documents
+#     return documents
     
 @st.cache_resource
 def initialize_resources():
     # Load documents
     documents = load_csv_data()
-    #docs = split_documents(documents)
+    docs = split_documents(documents)
 
-    qa_pairs = parse_qa_pairs("questions_answers_formatted.txt")
-    docs = qa_pairs 
+    # qa_pairs = parse_qa_pairs("questions_answers_formatted.txt")
+    # docs = qa_pairs 
     
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     
