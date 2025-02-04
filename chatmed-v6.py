@@ -147,7 +147,7 @@ def initialize_resources():
     llm = ChatOpenAI(model="gpt-4", temperature=0)  # Fixed model name typo
     
     system_prompt = """
-    Act as Dr. Steve, a veterinarian specializing in Cushing's disease in dogs. Using the provided context, answer the query thoroughly without omitting any important details from retrieved chunks. 
+    Act as Dr. Steve, a veterinarian specializing in different diseases in dogs. Using the provided context, answer the query thoroughly without omitting any important details from retrieved chunks. 
     Guidelines:
     Response must be in paragrapgh format
     Do NOT infer or assume additional symptoms, conditions, or causes beyond what is provided in the user's query and context.
