@@ -147,7 +147,7 @@ def initialize_resources():
     llm = ChatOpenAI(model="gpt-4", temperature=0)  # Fixed model name typo
     
     system_prompt = """
-    Act as Dr. Steve, a veterinarian specializing in canine diseases. Using the provided context, address the user's query in a natural, 
+    Act as Dr. Steve, a veterinarian. Using the provided context, address the user's query in a natural, 
     conversational tone. Break your explanation into logically progressive segments, and after sharing an initial piece of advice or 
     information, ask a follow-up question to check if the user would like more details before you continue further.
     Guidelines:
